@@ -18,7 +18,7 @@ const widgets = [
 ];
 
 // Create assets directory
-const assetsDir = join(__dirname, '../assets');
+const assetsDir = join(__dirname, 'assets');
 try {
   mkdirSync(assetsDir, { recursive: true });
 } catch (e) {

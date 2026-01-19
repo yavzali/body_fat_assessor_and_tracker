@@ -5,8 +5,8 @@ It initializes the server, registers tools, and sets up routes.
 """
 
 import sys
-import asyncio
 from pathlib import Path
+from functools import lru_cache
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +40,72 @@ app.add_middleware(
 
 # Include API router for file uploads
 app.include_router(upload_router)
+
+
+# ============================================================================
+# Widget HTML Loading
+# ============================================================================
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+
+@lru_cache(maxsize=None)
+def load_widget_html(widget_name: str) -> str:
+    """Load widget HTML from assets directory.
+    
+    Args:
+        widget_name: Name of the widget file (without .html extension)
+        
+    Returns:
+        Widget HTML content
+        
+    Raises:
+        FileNotFoundError: If widget HTML not found
+    """
+    # Try direct match first
+    html_path = ASSETS_DIR / f"{widget_name}.html"
+    if html_path.exists():
+        return html_path.read_text(encoding="utf-8")
+    
+    # Try with hash suffix (e.g., photo-upload-abc123.html)
+    candidates = sorted(ASSETS_DIR.glob(f"{widget_name}-*.html"))
+    if candidates:
+        return candidates[-1].read_text(encoding="utf-8")
+    
+    # Fallback to placeholder if assets not built yet
+    print(f"⚠️  Widget HTML for '{widget_name}' not found in {ASSETS_DIR}")
+    print(f"   Run 'npm run build' in the frontend directory to generate widgets")
+    
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{widget_name.replace('-', ' ').title()}</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 40px;
+            text-align: center;
+            background: #f5f5f5;
+        }}
+        .error {{
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            margin: 0 auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+    </style>
+</head>
+<body>
+    <div class="error">
+        <h2>⚠️ Widget Not Built</h2>
+        <p>The {widget_name} widget needs to be built.</p>
+        <p>Run: <code>cd frontend && npm run build</code></p>
+    </div>
+</body>
+</html>"""
 
 
 # ============================================================================
@@ -113,66 +179,19 @@ async def delete_my_data() -> dict:
 @mcp.resource("ui://widget/photo-upload.html")
 async def get_upload_widget() -> str:
     """Return the photo upload widget HTML."""
-    # In production, this would load the actual built widget
-    # For now, return placeholder
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Photo Upload</title>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script>
-            // Widget will be implemented in React
-            console.log('Upload widget loaded');
-        </script>
-    </body>
-    </html>
-    """
+    return load_widget_html("photo-upload")
 
 
 @mcp.resource("ui://widget/results.html")
 async def get_results_widget() -> str:
     """Return the results display widget HTML."""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Analysis Results</title>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script>
-            // Widget will be implemented in React
-            console.log('Results widget loaded');
-        </script>
-    </body>
-    </html>
-    """
+    return load_widget_html("results")
 
 
 @mcp.resource("ui://widget/timeline.html")
 async def get_timeline_widget() -> str:
     """Return the timeline/history widget HTML."""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Progress Timeline</title>
-    </head>
-    <body>
-        <div id="root"></div>
-        <script>
-            // Widget will be implemented in React (Phase 3)
-            console.log('Timeline widget loaded');
-        </script>
-    </body>
-    </html>
-    """
+    return load_widget_html("timeline")
 
 
 # ============================================================================
@@ -188,6 +207,12 @@ async def startup():
     
     # Initialize database
     init_db()
+    
+    # Check if widgets are built
+    if not ASSETS_DIR.exists():
+        print(f"\n⚠️  WARNING: Assets directory not found: {ASSETS_DIR}")
+        print(f"   Widgets will use placeholder HTML until frontend is built")
+        print(f"   Run: cd frontend && npm run build\n")
     
     print(f"✅ Server ready on {settings.host}:{settings.port}")
 
